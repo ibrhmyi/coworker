@@ -1,0 +1,56 @@
+{
+  "name": "coworker-mcp",
+  "version": "0.1.0-alpha.1",
+  "description": "Turn Cowork into an autonomous PM for Claude Code",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "coworker": "./bin/coworker"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist/",
+    "bin/"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "cowork",
+    "claude-code",
+    "ai",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.9.0",
+    "commander": "^14.0.3",
+    "express": "^5.2.1",
+    "js-yaml": "^4.1.1",
+    "pino": "^10.3.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.6.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4"
+  }
+}
