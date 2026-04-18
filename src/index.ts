@@ -9,6 +9,7 @@ import { show } from './cli/show.js';
 import { doctor } from './cli/doctor.js';
 import { tunnelSetup } from './cli/tunnel-setup.js';
 import { url } from './cli/url.js';
+import { installService, uninstallService } from './cli/service.js';
 
 const program = new Command();
 
@@ -62,5 +63,15 @@ program
   .command('url')
   .description('Print (and copy to clipboard) the current connector URL')
   .action(url);
+
+program
+  .command('install-service')
+  .description('Install Coworker as a background service (launchd/systemd)')
+  .action(installService);
+
+program
+  .command('uninstall-service')
+  .description('Remove the Coworker background service')
+  .action(uninstallService);
 
 program.parse();

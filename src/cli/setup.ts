@@ -173,5 +173,7 @@ export async function setup(directory?: string, opts: { stable?: boolean } = {})
   }
 
   // 6. Start server (blocks until Ctrl+C)
+  console.log("Tip: Run 'coworker install-service' to run Coworker in the background.");
+  console.log('     No terminal needed — starts automatically on login.\n');
   await start({});
 }

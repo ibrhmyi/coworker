@@ -5,6 +5,7 @@ import { findProjectRoot, getCoworkerDir, getDbPath, getGlobalBinDir } from '../
 import { initDb, closeDb, markOrphanedTasks } from '../core/store.js';
 import { loadConfig } from '../core/config.js';
 import { isCloudflaredLoggedIn, getTunnelId, findCloudflared } from '../server/tunnel.js';
+import { checkServiceStatus } from './service.js';
 
 interface Check {
   name: string;
@@ -124,7 +125,27 @@ export async function doctor(): Promise<void> {
     checks.push({ name: 'orphaned tasks', passed: false, detail: 'no project found', hint: 'Run: coworker init' });
   }
 
-  // 7. config.yaml
+  // 7. Background service
+  {
+    const service = checkServiceStatus();
+    if (service.installed) {
+      checks.push({
+        name: 'background service',
+        passed: true,
+        detail: service.running ? 'installed and running' : 'installed but not running',
+        hint: service.running ? undefined : 'Run: coworker install-service',
+      });
+    } else {
+      checks.push({
+        name: 'background service',
+        passed: true,
+        detail: 'not installed (optional)',
+        hint: 'Run: coworker install-service',
+      });
+    }
+  }
+
+  // 8. config.yaml
   if (projectDir) {
     try {
       loadConfig(projectDir);
@@ -137,7 +158,7 @@ export async function doctor(): Promise<void> {
     checks.push({ name: 'config.yaml', passed: false, detail: 'no project found', hint: 'Run: coworker init' });
   }
 
-  // 8. STATUS.md and CONTEXT.md
+  // 9. STATUS.md and CONTEXT.md
   if (projectDir) {
     const coworkerDir = getCoworkerDir(projectDir);
 
@@ -161,7 +182,7 @@ export async function doctor(): Promise<void> {
     }
   }
 
-  // 9. Verification commands (if configured)
+  // 10. Verification commands (if configured)
   if (projectDir) {
     try {
       const config = loadConfig(projectDir);
@@ -184,7 +205,7 @@ export async function doctor(): Promise<void> {
     } catch { /* config already checked above */ }
   }
 
-  // 10. Named tunnel (if configured)
+  // 11. Named tunnel (if configured)
   if (projectDir) {
     try {
       const config = loadConfig(projectDir);
