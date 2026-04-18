@@ -12,9 +12,16 @@ interface Check {
   passed: boolean;
   detail: string;
   hint?: string;
+  /** Severity when failed: 'error' blocks usage, 'warn' is informational. */
+  severity?: 'error' | 'warn';
 }
 
-export async function doctor(): Promise<void> {
+export interface DoctorOptions {
+  /** Output machine-readable JSON instead of the human-readable report. */
+  json?: boolean;
+}
+
+export async function doctor(options: DoctorOptions = {}): Promise<void> {
   const checks: Check[] = [];
 
   // 1. Node.js version
@@ -27,6 +34,7 @@ export async function doctor(): Promise<void> {
       passed: false,
       detail: `v${process.versions.node} (20+ required)`,
       hint: 'Upgrade at https://nodejs.org',
+      severity: 'error',
     });
   }
 
@@ -44,26 +52,25 @@ export async function doctor(): Promise<void> {
       passed: false,
       detail: 'not found in PATH',
       hint: 'Install Claude Code: https://docs.anthropic.com/en/docs/claude-code',
+      severity: 'error',
     });
   }
 
-  // 3. cloudflared binary (check PATH + ~/.coworker/bin/)
-  let cloudflaredFound = false;
+  // 3. cloudflared binary
   try {
     const path = execSync('which cloudflared', { encoding: 'utf-8' }).trim();
     checks.push({ name: 'cloudflared', passed: true, detail: path });
-    cloudflaredFound = true;
   } catch {
     const globalPath = join(getGlobalBinDir(), 'cloudflared');
     if (existsSync(globalPath)) {
       checks.push({ name: 'cloudflared', passed: true, detail: `${globalPath} (auto-downloaded)` });
-      cloudflaredFound = true;
     } else {
       checks.push({
         name: 'cloudflared',
         passed: false,
         detail: 'not found in PATH or ~/.coworker/bin/',
         hint: 'Run: coworker setup (auto-downloads), or brew install cloudflared (macOS)',
+        severity: 'error',
       });
     }
   }
@@ -78,6 +85,7 @@ export async function doctor(): Promise<void> {
       passed: false,
       detail: 'not found in current or parent directories',
       hint: 'Run: coworker init',
+      severity: 'warn',
     });
   }
 
@@ -95,6 +103,7 @@ export async function doctor(): Promise<void> {
           passed: false,
           detail: msg,
           hint: 'Check file permissions or delete and re-run coworker init',
+          severity: 'error',
         });
       }
     } else {
@@ -103,10 +112,11 @@ export async function doctor(): Promise<void> {
         passed: false,
         detail: 'file not found',
         hint: 'Run: coworker init',
+        severity: 'warn',
       });
     }
   } else {
-    checks.push({ name: 'tasks.db', passed: false, detail: 'no project found', hint: 'Run: coworker init' });
+    checks.push({ name: 'tasks.db', passed: false, detail: 'no project found', hint: 'Run: coworker init', severity: 'warn' });
   }
 
   // 6. Orphaned tasks
@@ -119,28 +129,39 @@ export async function doctor(): Promise<void> {
         checks.push({ name: 'orphaned tasks', passed: true, detail: `cleaned up ${orphaned} orphaned task(s)` });
       }
     } catch {
-      checks.push({ name: 'orphaned tasks', passed: false, detail: 'could not check', hint: 'Database may be locked' });
+      checks.push({ name: 'orphaned tasks', passed: false, detail: 'could not check', hint: 'Database may be locked', severity: 'warn' });
     }
   } else {
-    checks.push({ name: 'orphaned tasks', passed: false, detail: 'no project found', hint: 'Run: coworker init' });
+    checks.push({ name: 'orphaned tasks', passed: false, detail: 'no project found', hint: 'Run: coworker init', severity: 'warn' });
   }
 
   // 7. Background service
+  // FIX (2026-04-18): previously `passed: true` was hardcoded, so "installed but not running"
+  // rendered as a green ✓. That silently hid the most common cause of MCP timeouts in Cowork.
+  // Now the check passes only if the service is actually serving requests OR not installed
+  // (opt-in feature; absence is not a failure).
   {
     const service = checkServiceStatus();
-    if (service.installed) {
-      checks.push({
-        name: 'background service',
-        passed: true,
-        detail: service.running ? 'installed and running' : 'installed but not running',
-        hint: service.running ? undefined : 'Run: coworker install-service',
-      });
-    } else {
+    if (!service.installed) {
       checks.push({
         name: 'background service',
         passed: true,
         detail: 'not installed (optional)',
-        hint: 'Run: coworker install-service',
+        hint: 'Run: coworker install-service to start Coworker automatically on login',
+      });
+    } else if (service.running) {
+      checks.push({
+        name: 'background service',
+        passed: true,
+        detail: 'installed and running',
+      });
+    } else {
+      checks.push({
+        name: 'background service',
+        passed: false,
+        detail: 'installed but NOT running — MCP calls from Cowork will time out',
+        hint: 'Run: coworker restart-service  (or check ~/.coworker/logs/coworker.log for crash cause)',
+        severity: 'error',
       });
     }
   }
@@ -152,10 +173,10 @@ export async function doctor(): Promise<void> {
       checks.push({ name: 'config.yaml', passed: true, detail: 'valid' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      checks.push({ name: 'config.yaml', passed: false, detail: msg, hint: 'Fix the config file or delete it to use defaults' });
+      checks.push({ name: 'config.yaml', passed: false, detail: msg, hint: 'Fix the config file or delete it to use defaults', severity: 'error' });
     }
   } else {
-    checks.push({ name: 'config.yaml', passed: false, detail: 'no project found', hint: 'Run: coworker init' });
+    checks.push({ name: 'config.yaml', passed: false, detail: 'no project found', hint: 'Run: coworker init', severity: 'warn' });
   }
 
   // 9. STATUS.md and CONTEXT.md
@@ -168,17 +189,17 @@ export async function doctor(): Promise<void> {
         accessSync(statusPath, constants.W_OK);
         checks.push({ name: 'STATUS.md', passed: true, detail: 'exists and writable' });
       } catch {
-        checks.push({ name: 'STATUS.md', passed: false, detail: 'exists but not writable', hint: 'Check file permissions' });
+        checks.push({ name: 'STATUS.md', passed: false, detail: 'exists but not writable', hint: 'Check file permissions', severity: 'warn' });
       }
     } else {
-      checks.push({ name: 'STATUS.md', passed: false, detail: 'not found', hint: 'Run: coworker init' });
+      checks.push({ name: 'STATUS.md', passed: false, detail: 'not found', hint: 'Run: coworker init', severity: 'warn' });
     }
 
     const contextPath = join(coworkerDir, 'CONTEXT.md');
     if (existsSync(contextPath)) {
       checks.push({ name: 'CONTEXT.md', passed: true, detail: 'exists' });
     } else {
-      checks.push({ name: 'CONTEXT.md', passed: false, detail: 'not found', hint: 'Run: coworker init' });
+      checks.push({ name: 'CONTEXT.md', passed: false, detail: 'not found', hint: 'Run: coworker init', severity: 'warn' });
     }
   }
 
@@ -198,6 +219,7 @@ export async function doctor(): Promise<void> {
               passed: false,
               detail: 'not found in PATH',
               hint: `Verification command "${cmd}" requires "${binary}" to be installed`,
+              severity: 'error',
             });
           }
         }
@@ -216,6 +238,7 @@ export async function doctor(): Promise<void> {
             passed: false,
             detail: 'cloudflared not logged in (no cert.pem)',
             hint: "Run: cloudflared tunnel login",
+            severity: 'error',
           });
         } else {
           checks.push({ name: 'named tunnel auth', passed: true, detail: 'cert.pem found' });
@@ -230,10 +253,11 @@ export async function doctor(): Promise<void> {
                 passed: false,
                 detail: 'tunnel not found',
                 hint: "Run: coworker tunnel-setup",
+                severity: 'error',
               });
             }
           } catch {
-            checks.push({ name: 'named tunnel', passed: false, detail: 'could not check', hint: 'cloudflared may not be installed' });
+            checks.push({ name: 'named tunnel', passed: false, detail: 'could not check', hint: 'cloudflared may not be installed', severity: 'warn' });
           }
         }
       }
@@ -243,23 +267,47 @@ export async function doctor(): Promise<void> {
   // Close DB if we opened it
   closeDb();
 
-  // Print results
+  // --- Output ---
+
+  const passed = checks.filter((c) => c.passed).length;
+  const total = checks.length;
+  const errorCount = checks.filter((c) => !c.passed && c.severity === 'error').length;
+
+  if (options.json) {
+    // Machine-readable output for Cowork-side pre-flight health checks
+    const payload = {
+      healthy: errorCount === 0,
+      passed,
+      total,
+      error_count: errorCount,
+      checks: checks.map((c) => ({
+        name: c.name,
+        passed: c.passed,
+        detail: c.detail,
+        hint: c.hint ?? null,
+        severity: c.severity ?? null,
+      })),
+    };
+    console.log(JSON.stringify(payload, null, 2));
+    process.exitCode = errorCount > 0 ? 1 : 0;
+    return;
+  }
+
+  // Human-readable output
   console.log('Coworker Doctor');
   console.log('\u2500'.repeat(40));
 
-  let passed = 0;
   for (const check of checks) {
     const icon = check.passed ? '\u2713' : '\u2717';
     console.log(`${icon} ${check.name}: ${check.detail}`);
     if (!check.passed && check.hint) {
       console.log(`  \u2192 ${check.hint}`);
     }
-    if (check.passed) passed++;
   }
 
-  console.log(`\n${passed}/${checks.length} checks passed.`);
-
-  if (passed < checks.length) {
+  console.log(`\n${passed}/${total} checks passed.`);
+  if (errorCount > 0) {
+    console.log(`${errorCount} error${errorCount === 1 ? '' : 's'} — Coworker cannot serve MCP calls reliably until these are fixed.`);
     process.exitCode = 1;
   }
 }

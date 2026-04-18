@@ -9,14 +9,14 @@ import { show } from './cli/show.js';
 import { doctor } from './cli/doctor.js';
 import { tunnelSetup } from './cli/tunnel-setup.js';
 import { url } from './cli/url.js';
-import { installService, uninstallService } from './cli/service.js';
+import { installService, uninstallService, restartService } from './cli/service.js';
 
 const program = new Command();
 
 program
   .name('coworker')
   .description('Turn Cowork into an autonomous PM for Claude Code')
-  .version('0.1.0');
+  .version('0.1.0-alpha.4');
 
 program
   .command('init [directory]')
@@ -51,7 +51,8 @@ program
 program
   .command('doctor')
   .description('Run health checks')
-  .action(doctor);
+  .option('--json', 'Output machine-readable JSON (for scripting / Cowork pre-flight)')
+  .action((opts) => doctor({ json: !!opts.json }));
 
 program
   .command('tunnel-setup')
@@ -68,6 +69,11 @@ program
   .command('install-service')
   .description('Install Coworker as a background service (launchd/systemd)')
   .action(installService);
+
+program
+  .command('restart-service')
+  .description('Restart the Coworker background service (use after a crash or update)')
+  .action(restartService);
 
 program
   .command('uninstall-service')
