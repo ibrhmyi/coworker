@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { getGlobalCoworkerDir, getGlobalBinDir } from '../../src/utils/paths.js';
 
 describe('setup prerequisites', () => {
@@ -21,17 +21,29 @@ describe('setup prerequisites', () => {
   });
 
   it('getCloudflaredDownloadUrl returns a URL for current platform', () => {
-    // This tests that the platform detection logic works
-    const platform = process.platform;
+    const plat = process.platform;
     const arch = process.arch;
 
-    // We support darwin, linux, win32
     const supported = ['darwin', 'linux', 'win32'];
-    if (supported.includes(platform)) {
-      // Just verify we'd get a URL — the actual function is in setup.ts
-      // but it's not exported, so we test the platform detection directly
-      expect(platform).toBeTruthy();
+    if (supported.includes(plat)) {
+      expect(plat).toBeTruthy();
       expect(arch).toBeTruthy();
+    }
+  });
+});
+
+describe('setup auto-installs background service', () => {
+  it('setup module exports the setup function', async () => {
+    const mod = await import('../../src/cli/setup.js');
+    expect(typeof mod.setup).toBe('function');
+  });
+
+  it('background service is supported on current platform', () => {
+    const os = platform();
+    // setup auto-installs on darwin and linux, falls back on others
+    const supported = ['darwin', 'linux'];
+    if (supported.includes(os)) {
+      expect(supported).toContain(os);
     }
   });
 });

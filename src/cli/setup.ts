@@ -1,10 +1,13 @@
-import { existsSync, chmodSync } from 'node:fs';
+import { existsSync, chmodSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { platform } from 'node:os';
 import { init } from './init.js';
 import { start } from './start.js';
+import { installService } from './service.js';
 import { tunnelSetup } from './tunnel-setup.js';
-import { getGlobalBinDir, ensureGlobalDirs } from '../utils/paths.js';
+import { getGlobalBinDir, ensureGlobalDirs, getTunnelUrlFile } from '../utils/paths.js';
+import { copyToClipboard } from '../utils/clipboard.js';
 
 function checkNodeVersion(): boolean {
   const major = parseInt(process.versions.node.split('.')[0], 10);
@@ -136,6 +139,27 @@ async function checkCloudflared(): Promise<boolean> {
   return downloadCloudflared();
 }
 
+function waitForTunnelUrl(projectDir: string, timeoutMs = 30_000, intervalMs = 500): Promise<string | undefined> {
+  const urlFile = getTunnelUrlFile(projectDir);
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      if (existsSync(urlFile)) {
+        try {
+          const url = readFileSync(urlFile, 'utf-8').trim();
+          if (url) { resolve(url); return; }
+        } catch {}
+      }
+      if (Date.now() - start > timeoutMs) {
+        resolve(undefined);
+        return;
+      }
+      setTimeout(check, intervalMs);
+    };
+    check();
+  });
+}
+
 export async function setup(directory?: string, opts: { stable?: boolean } = {}): Promise<void> {
   console.log('Welcome to Coworker — turn Cowork into an autonomous PM for Claude Code.\n');
   console.log('Running setup checks...\n');
@@ -164,7 +188,6 @@ export async function setup(directory?: string, opts: { stable?: boolean } = {})
   // 5. If --stable, run named tunnel setup before starting
   if (opts.stable) {
     console.log('\nRunning named tunnel setup for a permanent URL...\n');
-    // tunnelSetup may process.exit(1) if cloudflared not logged in — that's intentional
     await tunnelSetup({});
     console.log('');
   } else {
@@ -172,8 +195,41 @@ export async function setup(directory?: string, opts: { stable?: boolean } = {})
     console.log("For a permanent URL, stop and run:  coworker setup --stable\n");
   }
 
-  // 6. Start server (blocks until Ctrl+C)
-  console.log("Tip: Run 'coworker install-service' to run Coworker in the background.");
-  console.log('     No terminal needed — starts automatically on login.\n');
-  await start({});
+  // 6. Install background service (macOS/Linux) or fall back to foreground
+  const os = platform();
+  if (os !== 'darwin' && os !== 'linux') {
+    console.log('Background service not supported on this platform. Starting in foreground.\n');
+    await start({});
+    return;
+  }
+
+  try {
+    await installService();
+    console.log('✓ Background service installed (starts automatically on login)\n');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`Failed to install background service: ${msg}`);
+    console.log('Starting in foreground instead.\n');
+    await start({});
+    return;
+  }
+
+  // 7. Wait for tunnel URL from background service
+  console.log('Waiting for tunnel URL...');
+  const tunnelUrl = await waitForTunnelUrl(projectDir);
+
+  if (tunnelUrl) {
+    const clipboardOk = copyToClipboard(tunnelUrl);
+    console.log(`\nConnector URL: ${tunnelUrl}`);
+    if (clipboardOk) console.log('✓ Copied to clipboard!');
+    console.log('\nTo connect:');
+    console.log('1. Open Claude Desktop → Settings → Connectors');
+    console.log('2. Click "Add custom connector"');
+    console.log(`3. Paste the URL${clipboardOk ? ' (already on your clipboard)' : ''}`);
+    console.log('4. Save, then toggle on in your conversation');
+  } else {
+    console.log('\nCould not detect tunnel URL yet. Run `coworker url` to get it once the service starts.');
+  }
+
+  console.log("\nYou're done. Close this terminal — Coworker runs in the background.");
 }
