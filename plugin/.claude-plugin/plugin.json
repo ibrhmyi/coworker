@@ -1,0 +1,8 @@
+{
+  "name": "coworker-mcp",
+  "version": "0.1.0",
+  "description": "Turn Cowork into an autonomous PM for Claude Code. Submit tasks, iterate with session resumption, run verification, and maintain project state.",
+  "author": {
+    "name": "Coworker Contributors"
+  }
+}

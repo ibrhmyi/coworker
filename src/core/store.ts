@@ -34,6 +34,22 @@ const CREATE_INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)',
 ];
 
+/** Columns that may be missing from older DBs created before Day 6. */
+const MIGRATIONS: Array<{ column: string; ddl: string }> = [
+  { column: 'verification_passed', ddl: 'ALTER TABLE tasks ADD COLUMN verification_passed BOOLEAN' },
+  { column: 'verification_attempts', ddl: 'ALTER TABLE tasks ADD COLUMN verification_attempts INTEGER DEFAULT 0' },
+];
+
+function runMigrations(d: Database.Database): void {
+  const cols = d.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+  const existing = new Set(cols.map((c) => c.name));
+  for (const m of MIGRATIONS) {
+    if (!existing.has(m.column)) {
+      d.exec(m.ddl);
+    }
+  }
+}
+
 export function initDb(dbPath: string): Database.Database {
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
@@ -41,6 +57,7 @@ export function initDb(dbPath: string): Database.Database {
   for (const idx of CREATE_INDEXES) {
     db.exec(idx);
   }
+  runMigrations(db);
   return db;
 }
 
@@ -92,7 +109,7 @@ export function createTask(task: Task): void {
     paragraph_summary: task.paragraph_summary ?? null,
     output_path: task.output_path,
     prompt_path: task.prompt_path,
-    verification_passed: task.verification_passed ?? null,
+    verification_passed: task.verification_passed == null ? null : task.verification_passed ? 1 : 0,
     verification_attempts: task.verification_attempts ?? 0,
   });
 }
@@ -108,6 +125,8 @@ export function updateTask(taskId: string, updates: Partial<Task>): void {
     fields.push(`${dbKey} = @${dbKey}`);
     if (key === 'allowed_tools' && Array.isArray(value)) {
       values[dbKey] = JSON.stringify(value);
+    } else if (typeof value === 'boolean') {
+      values[dbKey] = value ? 1 : 0;
     } else {
       values[dbKey] = value ?? null;
     }
@@ -189,7 +208,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     paragraph_summary: row.paragraph_summary as string | undefined,
     output_path: row.output_path as string,
     prompt_path: row.prompt_path as string,
-    verification_passed: row.verification_passed as boolean | undefined,
+    verification_passed: row.verification_passed == null ? undefined : Boolean(row.verification_passed),
     verification_attempts: row.verification_attempts as number | undefined,
   };
 }

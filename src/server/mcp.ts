@@ -150,11 +150,14 @@ export async function startServer(port: number, projectDir: string): Promise<{
     res.json({ status: 'ok', server: 'coworker', version: '0.1.0', tasks_this_session: taskCallCount });
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const httpServer = app.listen(port, '0.0.0.0', () => {
       const addr = httpServer.address();
       const actualPort = typeof addr === 'object' && addr ? addr.port : port;
       resolve({ app, server: httpServer, actualPort });
+    });
+    httpServer.on('error', (err) => {
+      reject(err);
     });
   });
 }

@@ -8,6 +8,7 @@ import { history } from './cli/history.js';
 import { show } from './cli/show.js';
 import { doctor } from './cli/doctor.js';
 import { tunnelSetup } from './cli/tunnel-setup.js';
+import { url } from './cli/url.js';
 
 const program = new Command();
 
@@ -30,7 +31,8 @@ program
 program
   .command('setup [directory]')
   .description('One-command setup: check deps, init project, start server')
-  .action(setup);
+  .option('--stable', 'Also run named-tunnel setup for a permanent URL')
+  .action((directory, opts) => setup(directory, opts));
 
 program
   .command('history')
@@ -55,5 +57,10 @@ program
   .description('Set up a permanent Cloudflare tunnel URL')
   .option('--name <name>', 'Tunnel name', 'coworker')
   .action(tunnelSetup);
+
+program
+  .command('url')
+  .description('Print (and copy to clipboard) the current connector URL')
+  .action(url);
 
 program.parse();

@@ -25,6 +25,10 @@ export function getDbPath(projectDir?: string): string {
   return join(getCoworkerDir(projectDir), 'tasks.db');
 }
 
+export function getTunnelUrlFile(projectDir?: string): string {
+  return join(getCoworkerDir(projectDir), 'tunnel-url.txt');
+}
+
 export function getLogDir(projectDir?: string): string {
   return join(getCoworkerDir(projectDir), 'logs');
 }

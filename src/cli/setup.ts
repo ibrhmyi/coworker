@@ -3,6 +3,7 @@ import { resolve, join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { init } from './init.js';
 import { start } from './start.js';
+import { tunnelSetup } from './tunnel-setup.js';
 import { getGlobalBinDir, ensureGlobalDirs } from '../utils/paths.js';
 
 function checkNodeVersion(): boolean {
@@ -135,7 +136,7 @@ async function checkCloudflared(): Promise<boolean> {
   return downloadCloudflared();
 }
 
-export async function setup(directory?: string): Promise<void> {
+export async function setup(directory?: string, opts: { stable?: boolean } = {}): Promise<void> {
   console.log('Welcome to Coworker — turn Cowork into an autonomous PM for Claude Code.\n');
   console.log('Running setup checks...\n');
 
@@ -160,7 +161,17 @@ export async function setup(directory?: string): Promise<void> {
   console.log('');
   await init(projectDir);
 
-  // 5. Start server (this blocks until Ctrl+C)
-  console.log('');
+  // 5. If --stable, run named tunnel setup before starting
+  if (opts.stable) {
+    console.log('\nRunning named tunnel setup for a permanent URL...\n');
+    // tunnelSetup may process.exit(1) if cloudflared not logged in — that's intentional
+    await tunnelSetup({});
+    console.log('');
+  } else {
+    console.log('\nUsing quick tunnel (URL changes on restart).');
+    console.log("For a permanent URL, stop and run:  coworker setup --stable\n");
+  }
+
+  // 6. Start server (blocks until Ctrl+C)
   await start({});
 }

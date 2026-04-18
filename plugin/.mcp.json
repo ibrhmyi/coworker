@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "coworker": {
+      "type": "http",
+      "url": "https://REPLACE_WITH_YOUR_TUNNEL_URL/mcp"
+    }
+  }
+}

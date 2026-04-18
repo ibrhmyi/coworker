@@ -13,7 +13,7 @@ const claudeSchema = z.object({
 });
 
 const serverSchema = z.object({
-  port: z.number().default(0),
+  port: z.number().default(17429),
   enable_tunnel: z.boolean().default(true),
   tunnel_mode: z.enum(['quick', 'named', 'none']).default('quick'),
   tunnel_name: z.string().default(''),
@@ -58,7 +58,7 @@ export type CoworkerConfig = {
 const DEFAULTS: CoworkerConfig = {
   version: 1,
   claude: { binary_path: 'claude', default_timeout_seconds: 600, default_max_turns: 20, default_allowed_tools: [], working_directory: '.' },
-  server: { port: 0, enable_tunnel: true, tunnel_mode: 'quick', tunnel_name: '' },
+  server: { port: 17429, enable_tunnel: true, tunnel_mode: 'quick', tunnel_name: '' },
   summary: { mode: 'heuristic', oneline_max_chars: 200, paragraph_max_chars: 800 },
   limits: { max_concurrent_tasks: 5, max_task_age_hours: 24 },
   verification: { enabled: false, commands: [], max_retries: 2, timeout_seconds: 60 },
@@ -123,7 +123,7 @@ claude:
   working_directory: .             # Relative to project root
 
 server:
-  port: 0                          # 0 = random free port
+  port: 17429                      # fixed port — 0 = random free port
   enable_tunnel: true              # Start a Cloudflare tunnel for remote access
   tunnel_mode: quick               # quick (random URL) | named (permanent URL) | none
   tunnel_name: ""                  # Name for named tunnel (set by 'coworker tunnel-setup')
