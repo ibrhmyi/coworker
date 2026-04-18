@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { execSync } from 'node:child_process';
 import { findProjectRoot } from '../utils/paths.js';
@@ -7,15 +8,55 @@ import { findProjectRoot } from '../utils/paths.js';
 const PLIST_LABEL = 'com.coworker.mcp';
 const SYSTEMD_SERVICE = 'coworker';
 
-function getCoworkerBinary(): string {
-  try {
-    const which = execSync('which coworker', { encoding: 'utf-8' }).trim();
-    if (which) return which;
-  } catch {}
-  return process.argv[1];
+/**
+ * Locate this package's compiled dist/index.js.
+ *
+ * service.ts compiles to dist/cli/service.js; dist/index.js sits at ../index.js
+ * relative to it. We also fall back to walking up to a coworker-mcp
+ * package.json so the function works when tests import from src/.
+ *
+ * Why this matters (alpha.5 fix):
+ *   - In alpha.3 we passed a shell-wrapper into `node`, which crashed.
+ *   - In alpha.4 we invoked the shell-wrapper directly, but the wrapper is
+ *     usually an extensionless file with `#!/usr/bin/env node`. Launchd's
+ *     PATH resolves to an older Node (e.g. v20), which refuses extensionless
+ *     ESM → ERR_UNKNOWN_FILE_EXTENSION.
+ *   - Alpha.5: skip the wrapper entirely, target dist/index.js (a plain .js
+ *     file) with an explicit Node binary (process.execPath). Deterministic.
+ */
+export function resolveDistIndex(): string {
+  const thisFile = fileURLToPath(import.meta.url);
+  const thisDir = dirname(thisFile);
+
+  // Compiled/installed case: dist/cli/service.js → dist/index.js
+  const adjacent = join(thisDir, '..', 'index.js');
+  if (existsSync(adjacent)) return adjacent;
+
+  // From-source case: walk up looking for coworker-mcp package.json, then dist/index.js
+  let dir = thisDir;
+  for (let i = 0; i < 6; i++) {
+    const pkgJson = join(dir, 'package.json');
+    if (existsSync(pkgJson)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgJson, 'utf-8')) as { name?: string };
+        if (pkg.name === 'coworker-mcp') {
+          const distPath = join(dir, 'dist', 'index.js');
+          if (existsSync(distPath)) return distPath;
+          break;
+        }
+      } catch {}
+    }
+    dir = dirname(dir);
+  }
+
+  throw new Error(
+    'Could not locate coworker-mcp dist/index.js. Run `pnpm build` or reinstall the package.',
+  );
 }
 
 function getNodeBinary(): string {
+  // The Node currently executing this code. Guaranteed to exist and be
+  // compatible with the code that just called this function.
   return process.execPath;
 }
 
@@ -42,36 +83,26 @@ function getPlistPath(): string {
 }
 
 /**
- * Build the ProgramArguments / ExecStart command parts for the service.
+ * Build the ProgramArguments / ExecStart command parts.
  *
- * Critical: `which coworker` typically returns a shell-script wrapper installed
- * by npm/pnpm/yarn (e.g. /Users/foo/Library/pnpm/coworker). Invoking `node`
- * against a shell wrapper produces:
+ * Alpha.5: always `[nodeBin, distIndex, 'start']`. distIndex is a plain .js
+ * file, so any Node ≥18 can load it regardless of `"type":"module"` or PATH
+ * resolution. No shebang, no wrapper, no PATH reliance.
  *
- *   SyntaxError: missing ) after argument list
- *
- * because Node tries to parse shell as JavaScript. The wrapper is already
- * executable and finds its own node via its shebang. So:
- *
- *   - If coworkerBin ends in .js / .mjs / .cjs → use `node <file> start`
- *   - Otherwise (shell wrapper, .cmd, native binary) → use `<bin> start` directly
- *
- * Regression history: the unconditional `node` prefix broke every globally
- * installed user on macOS/Linux from 0.1.0-alpha.1 through alpha.3.
- * Fixed in alpha.4.
+ * Regression history:
+ *   - Alpha.1–3: unconditional `node <shell-wrapper>` → SyntaxError loop.
+ *   - Alpha.4: extension-based detection invoked wrappers directly, but
+ *     extensionless wrappers + older launchd-Node → ERR_UNKNOWN_FILE_EXTENSION.
+ *   - Alpha.5 (this): target dist/index.js directly. See resolveDistIndex().
  */
-export function buildServiceArgs(coworkerBin: string, nodeBin: string): string[] {
-  const isJsFile = /\.(c|m)?js$/i.test(coworkerBin);
-  if (isJsFile) {
-    return [nodeBin, coworkerBin, 'start'];
-  }
-  return [coworkerBin, 'start'];
+export function buildServiceArgs(distIndex: string, nodeBin: string): string[] {
+  return [nodeBin, distIndex, 'start'];
 }
 
-export function generatePlist(coworkerBin: string, nodeBin: string, projectDir: string, logFile: string): string {
+export function generatePlist(distIndex: string, nodeBin: string, projectDir: string, logFile: string): string {
   const nodeBinDir = dirname(nodeBin);
-  const pathValue = `/usr/local/bin:/usr/bin:/bin:${nodeBinDir}`;
-  const args = buildServiceArgs(coworkerBin, nodeBin);
+  const pathValue = `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${nodeBinDir}`;
+  const args = buildServiceArgs(distIndex, nodeBin);
   const argsXml = args.map((a) => `    <string>${a}</string>`).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -100,6 +131,8 @@ ${argsXml}
   <dict>
     <key>PATH</key>
     <string>${pathValue}</string>
+    <key>HOME</key>
+    <string>${homedir()}</string>
   </dict>
 </dict>
 </plist>`;
@@ -111,10 +144,10 @@ function getSystemdPath(): string {
   return join(homedir(), '.config', 'systemd', 'user', `${SYSTEMD_SERVICE}.service`);
 }
 
-export function generateSystemdUnit(coworkerBin: string, nodeBin: string, projectDir: string): string {
+export function generateSystemdUnit(distIndex: string, nodeBin: string, projectDir: string): string {
   const nodeBinDir = dirname(nodeBin);
   const pathValue = `/usr/local/bin:/usr/bin:/bin:${nodeBinDir}`;
-  const execStart = buildServiceArgs(coworkerBin, nodeBin).join(' ');
+  const execStart = buildServiceArgs(distIndex, nodeBin).join(' ');
 
   return `[Unit]
 Description=Coworker MCP Server
@@ -143,7 +176,7 @@ export async function installService(): Promise<void> {
     process.exit(1);
   }
 
-  const coworkerBin = getCoworkerBinary();
+  const distIndex = resolveDistIndex();
   const nodeBin = getNodeBinary();
   const projectDir = getProjectDir();
   const logDir = getGlobalLogDir();
@@ -152,15 +185,15 @@ export async function installService(): Promise<void> {
   ensureDir(logDir);
 
   if (os === 'darwin') {
-    installLaunchd(coworkerBin, nodeBin, projectDir, logFile);
+    installLaunchd(distIndex, nodeBin, projectDir, logFile);
   } else {
-    installSystemd(coworkerBin, nodeBin, projectDir);
+    installSystemd(distIndex, nodeBin, projectDir);
   }
 }
 
-function installLaunchd(coworkerBin: string, nodeBin: string, projectDir: string, logFile: string): void {
+function installLaunchd(distIndex: string, nodeBin: string, projectDir: string, logFile: string): void {
   const plistPath = getPlistPath();
-  const plistContent = generatePlist(coworkerBin, nodeBin, projectDir, logFile);
+  const plistContent = generatePlist(distIndex, nodeBin, projectDir, logFile);
 
   // Unload existing if present
   if (existsSync(plistPath)) {
@@ -174,12 +207,11 @@ function installLaunchd(coworkerBin: string, nodeBin: string, projectDir: string
 
   execSync(`launchctl load "${plistPath}"`);
 
-  // POST-INSTALL VERIFICATION (2026-04-18 fix):
-  // Previously the install reported success as soon as `launchctl load` returned,
-  // which succeeds even if the service immediately crashes. Now we wait briefly
-  // and confirm a PID is present before declaring victory — and if the service
-  // died at startup, surface the log tail so the user knows what happened.
-  const running = waitForRunning(2000);
+  // POST-INSTALL VERIFICATION:
+  // `launchctl load` succeeds even if the service immediately crashes.
+  // Poll briefly and confirm a PID is present before declaring victory.
+  // If the service died at startup, surface the log tail inline.
+  const running = waitForRunning(3000);
   if (!running) {
     console.log('Coworker service was installed but failed to start.\n');
     console.log('Most recent log output:');
@@ -200,15 +232,17 @@ function installLaunchd(coworkerBin: string, nodeBin: string, projectDir: string
   console.log('  \u2713 Starts automatically on login');
   console.log('  \u2713 Running now (PID confirmed)');
   console.log('  \u2713 Auto-restart on crash (KeepAlive)\n');
+  console.log(`  Entry:   ${distIndex}`);
+  console.log(`  Node:    ${nodeBin}`);
   console.log('  Status:  coworker doctor');
   console.log('  Logs:    ~/.coworker/logs/coworker.log');
   console.log('  Restart: coworker restart-service');
   console.log('  Stop:    coworker uninstall-service');
 }
 
-function installSystemd(coworkerBin: string, nodeBin: string, projectDir: string): void {
+function installSystemd(distIndex: string, nodeBin: string, projectDir: string): void {
   const unitPath = getSystemdPath();
-  const unitContent = generateSystemdUnit(coworkerBin, nodeBin, projectDir);
+  const unitContent = generateSystemdUnit(distIndex, nodeBin, projectDir);
 
   ensureDir(dirname(unitPath));
   writeFileSync(unitPath, unitContent);
@@ -217,7 +251,7 @@ function installSystemd(coworkerBin: string, nodeBin: string, projectDir: string
   execSync(`systemctl --user enable ${SYSTEMD_SERVICE}`);
   execSync(`systemctl --user start ${SYSTEMD_SERVICE}`);
 
-  const running = waitForRunning(2000);
+  const running = waitForRunning(3000);
   if (!running) {
     console.log('Coworker service was installed but failed to start.\n');
     console.log('Recent journal output:');
@@ -238,13 +272,15 @@ function installSystemd(coworkerBin: string, nodeBin: string, projectDir: string
   console.log('  \u2713 Starts automatically on login');
   console.log('  \u2713 Running now (confirmed active)');
   console.log('  \u2713 Auto-restart on crash (Restart=always)\n');
+  console.log(`  Entry:   ${distIndex}`);
+  console.log(`  Node:    ${nodeBin}`);
   console.log('  Status:  coworker doctor');
   console.log('  Logs:    journalctl --user -u coworker -f');
   console.log('  Restart: coworker restart-service');
   console.log('  Stop:    coworker uninstall-service');
 }
 
-// --- Restart (new in 2026-04-18 fix) ---
+// --- Restart ---
 
 export async function restartService(): Promise<void> {
   const os = platform();
@@ -271,7 +307,7 @@ export async function restartService(): Promise<void> {
     execSync(`systemctl --user restart ${SYSTEMD_SERVICE}`);
   }
 
-  const running = waitForRunning(2000);
+  const running = waitForRunning(3000);
   if (running) {
     console.log('Coworker service restarted.');
     console.log('  \u2713 Running now');
@@ -398,12 +434,6 @@ function checkSystemdStatus(): { installed: boolean; running: boolean } {
 
 // --- Helper: wait for service to be running ---
 
-/**
- * Poll checkServiceStatus() every 200ms up to `timeoutMs` and return true
- * as soon as the service reports running. Returns false if it never started.
- * Used by install/restart flows to avoid reporting success on a service
- * that immediately crashed.
- */
 function waitForRunning(timeoutMs: number): boolean {
   const pollMs = 200;
   const deadline = Date.now() + timeoutMs;
@@ -411,7 +441,6 @@ function waitForRunning(timeoutMs: number): boolean {
     if (checkServiceStatus().running) return true;
     const sleepFor = Math.min(pollMs, deadline - Date.now());
     if (sleepFor > 0) {
-      // Synchronous sleep — we're in a CLI install/restart path, blocking is fine
       execSync(`sleep ${sleepFor / 1000}`);
     }
   }

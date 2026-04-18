@@ -1,6 +1,6 @@
 {
   "name": "coworker-mcp",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "description": "Turn Cowork into an autonomous PM for Claude Code",
   "type": "module",
   "main": "dist/index.js",
