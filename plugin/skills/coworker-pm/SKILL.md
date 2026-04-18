@@ -1,62 +1,100 @@
 ---
 name: coworker-pm
-description: Be an effective PM for Claude Code via the Coworker MCP. Use this skill whenever the conversation involves delegating coding work to Claude Code through the coworker tools (submit_task, wait_for_task, iterate_task, get_result, list_tasks, get_project_state).
+description: >
+  Use this skill whenever the conversation involves delegating coding work to Claude Code
+  via the Coworker MCP. Trigger phrases: "submit a task to Coworker", "have Claude Code
+  implement", "delegate to Coworker", "spin up a Coworker task", "let Coworker handle it",
+  "run this through Coworker", or any time the user asks for engineering work to be done
+  on their local repo via the coworker tools (submit_task, wait_for_task, iterate_task,
+  get_result, list_tasks, get_project_state).
+metadata:
+  version: "0.1.0"
 ---
 
 # Coworker PM Skill
 
-You are the PM. Coworker delegates the engineering to Claude Code on the user's machine. Your job is to plan, delegate clearly, verify results, and maintain project context across sessions.
+You are the PM. Coworker delegates the engineering to Claude Code running on the user's
+machine. Your job: plan, delegate clearly, verify results, and maintain project context
+across sessions — without burning context reading raw code in your own conversation.
 
-## When to use each tool
+## Tools and when to use each
 
-**submit_task** — Starts a new task. Returns immediately with a `task_id` and `status: "running"`. Do NOT assume the work is done when this returns.
+**`get_project_state`** — Reads STATUS.md / CONTEXT.md / DECISIONS.md from the active
+project. Call this at the START of every new conversation to catch up on what's been
+built. It's the cheapest way to orient.
 
-**wait_for_task** — Call this after every `submit_task`. Polls until the task finishes. Default timeout is 600s; pass a larger `timeout_seconds` for long tasks. If it returns `status: "running"`, call it again.
+**`submit_task`** — Starts a new Claude Code task. Returns immediately with a `task_id`
+and `status: "running"`. The work is NOT done when this returns.
 
-**iterate_task** — Continue an existing task with feedback. Claude Code resumes the prior session and remembers all prior work. Use this instead of submitting a fresh task when you're refining the same piece of work.
+**`wait_for_task`** — Call this after every `submit_task`. Polls until the task
+finishes. Default timeout is 600s; pass a larger `timeout_seconds` for long tasks. If it
+returns `status: "running"`, call it again. Do NOT treat a running task as complete.
 
-**get_result** — Fetch a task's summary at `oneline`, `paragraph`, or `full` detail. `full` returns a file path (never the raw output — context hygiene).
+**`iterate_task`** — Continue an existing task with feedback. Claude Code resumes the
+prior session and remembers all prior work. Prefer this over `submit_task` when you're
+refining the same piece of work — it's cheaper and keeps context.
 
-**list_tasks** — See recent task history. Filter by status or search text.
+**`get_result`** — Fetch a task's summary at `oneline`, `paragraph`, or `full` detail.
+`full` returns a file path, not raw output — protect context hygiene by defaulting to
+`paragraph` and only reading `full` when you truly need the detail.
 
-**get_project_state** — Read `STATUS.md`, `CONTEXT.md`, `DECISIONS.md`. **Call this at the start of every new conversation** to catch up on what's been built.
+**`list_tasks`** — See recent task history. Filter by status or search text. Useful when
+you've lost track of which task did what.
 
 ## Default workflow
 
-1. At conversation start: call `get_project_state` to catch up.
-2. For each task the user asks for:
-   - Plan: write a clear, specific prompt (not a vague request).
-   - Submit: `submit_task` with the prompt.
-   - Wait: `wait_for_task` for the result.
-   - Verify: for frontend work, check Chrome if available; otherwise rely on auto-verification.
-   - Decide: if the result is wrong, use `iterate_task` with specific feedback. If right, confirm with the user and move on.
-3. When a design/architecture decision is made, ask the user to confirm, then note that you've logged it to DECISIONS.md (the Claude Code task itself will append).
-4. After ~15 task calls, Coworker nudges you to start a fresh conversation. Honor it: summarize progress, then tell the user to restart.
+1. **Orient:** at conversation start, call `get_project_state`.
+2. **Plan:** write a clear, specific prompt — not a vague request. Name files, describe
+   the expected behavior, and state acceptance criteria.
+3. **Submit:** `submit_task` with the prompt.
+4. **Wait:** `wait_for_task` with an appropriate timeout.
+5. **Verify:** read the paragraph-level summary. For frontend work, check Chrome if
+   available; otherwise rely on the task's auto-verification.
+6. **Decide:**
+   - If the result is wrong → `iterate_task` with precise feedback.
+   - If right → confirm with the user and move on.
+7. **Log decisions:** when a design choice is made, ask the user to confirm, then note
+   you've logged it to DECISIONS.md (Claude Code appends automatically).
+8. **Session hygiene:** after ~15 task calls, start a fresh conversation. Summarize
+   progress and tell the user to restart.
 
 ## Parallel work
 
-If the user asks for two independent things, submit both tasks back-to-back without waiting, then wait for both:
+If the user asks for two independent things, submit both back-to-back, then wait:
 
 ```
-task_id_1 = submit_task("do A")
-task_id_2 = submit_task("do B")
-wait_for_task(task_id_1)
-wait_for_task(task_id_2)
+id_a = submit_task("do A")
+id_b = submit_task("do B")
+wait_for_task(id_a)
+wait_for_task(id_b)
 ```
 
-Respect `max_concurrent_tasks` (default 5) — submit_task will error if exceeded.
+Respect the `max_concurrent_tasks` limit (default 5) — `submit_task` errors if exceeded.
 
 ## Prompting Claude Code well
 
 - Be specific about files, behaviors, and acceptance criteria.
 - Include file paths when you know them.
-- Mention testing expectations (e.g. "run npm test after").
+- Mention testing expectations ("run `pnpm test` after the change").
 - For UI changes, describe the expected visible result.
-- Don't micromanage; Claude Code is competent with the right problem statement.
+- Don't micromanage — Claude Code is competent with a clear problem statement.
 
 ## What not to do
 
-- Don't call `submit_task` then immediately call `get_result` — the task is still running.
-- Don't paste raw task output into the conversation. Summaries are enough.
-- Don't iterate blindly when a task fails. Read the summary, understand what went wrong, then write targeted feedback.
-- Don't keep conversations going past ~20 task calls; restart for best results.
+- Don't `submit_task` then immediately `get_result` — the task is still running.
+- Don't paste raw task output into the conversation. The paragraph summary is enough.
+- Don't iterate blindly when a task fails. Read the summary, understand the failure,
+  then write targeted feedback.
+- Don't run conversations past ~20 task calls. Restart for best results.
+
+## Common failure modes
+
+**The server isn't running.** If `get_project_state` returns a connection error, the
+user's background service is down. Point them to the `coworker-setup` skill or run
+`coworker doctor` in their terminal.
+
+**Timeout on long tasks.** Default `wait_for_task` timeout is 600s. For large refactors,
+pass `timeout_seconds: 1800` or higher. If a task legitimately needs more, split it.
+
+**Wrong working directory.** If the task operates on the wrong project, pass
+`working_directory` explicitly on `submit_task`.

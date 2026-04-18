@@ -1,8 +1,13 @@
 {
-  "name": "coworker-mcp",
+  "name": "coworker",
   "version": "0.1.0",
-  "description": "Turn Cowork into an autonomous PM for Claude Code. Submit tasks, iterate with session resumption, run verification, and maintain project state.",
+  "description": "Turn Cowork into an autonomous PM for Claude Code. Delegate coding tasks to your local Claude Code CLI, iterate with session resumption, and keep a running project state.",
   "author": {
-    "name": "Coworker Contributors"
-  }
+    "name": "İbrahim Yıldız",
+    "url": "https://github.com/ibrhmyi"
+  },
+  "homepage": "https://github.com/ibrhmyi/coworker",
+  "repository": "https://github.com/ibrhmyi/coworker",
+  "license": "MIT",
+  "keywords": ["coworker", "claude-code", "mcp", "delegation", "autonomous-pm", "coding-agent"]
 }

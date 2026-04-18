@@ -80,6 +80,10 @@ Coworker doesn't save money on the coding side — it saves **your time** and **
 
 ## Quick Start
 
+### Cowork plugin (recommended)
+
+One-click Cowork install. Bundles the MCP connector + 2 skills. See [`plugin/README.md`](plugin/README.md).
+
 ### One-command setup
 
 ```bash

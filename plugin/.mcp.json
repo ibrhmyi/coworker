@@ -2,7 +2,7 @@
   "mcpServers": {
     "coworker": {
       "type": "http",
-      "url": "https://REPLACE_WITH_YOUR_TUNNEL_URL/mcp"
+      "url": "http://127.0.0.1:17429/mcp"
     }
   }
 }
