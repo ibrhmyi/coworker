@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import express from 'express';
 import { initDb, markOrphanedTasks } from '../core/store.js';
@@ -85,6 +86,23 @@ function createMcpServer(projectDir: string): McpServer {
   });
 
   return server;
+}
+
+export async function startStdioServer(projectDir: string): Promise<void> {
+  ensureCoworkerDirs(projectDir);
+  initDb(getDbPath(projectDir));
+
+  const orphaned = markOrphanedTasks(1);
+  if (orphaned > 0) {
+    process.stderr.write(`Marked ${orphaned} orphaned task(s) as failed.\n`);
+  }
+
+  taskCallCount = 0;
+
+  const server = createMcpServer(projectDir);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  // Server runs until stdin closes; no return.
 }
 
 export async function startServer(port: number, projectDir: string): Promise<{

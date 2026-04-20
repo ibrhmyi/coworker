@@ -16,7 +16,7 @@ const program = new Command();
 program
   .name('coworker')
   .description('Turn Cowork into an autonomous PM for Claude Code')
-  .version('0.1.0-alpha.5');
+  .version('0.1.0-alpha.7');
 
 program
   .command('init [directory]')
@@ -27,7 +27,17 @@ program
   .command('start')
   .description('Start the MCP server and Cloudflare tunnel')
   .option('--port <number>', 'Port to listen on')
-  .action(start);
+  .option('--stdio', 'Run over stdio transport instead of HTTP')
+  .action(async (opts) => {
+    if (opts.stdio) {
+      const { startStdioServer } = await import('./server/mcp.js');
+      const { findProjectRoot } = await import('./utils/paths.js');
+      const projectDir = findProjectRoot() || process.cwd();
+      await startStdioServer(projectDir);
+    } else {
+      await start(opts);
+    }
+  });
 
 program
   .command('setup [directory]')

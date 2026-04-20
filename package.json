@@ -1,6 +1,6 @@
 {
   "name": "coworker-mcp",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.7",
   "description": "Turn Cowork into an autonomous PM for Claude Code",
   "type": "module",
   "main": "dist/index.js",
@@ -18,7 +18,8 @@
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "mcp",
