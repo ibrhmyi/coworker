@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "coworker": {
-      "type": "http",
-      "url": "http://127.0.0.1:17429/mcp"
+      "command": "npx",
+      "args": ["-y", "coworker-mcp@latest", "start", "--stdio"]
     }
   }
 }

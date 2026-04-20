@@ -1,6 +1,6 @@
 {
   "name": "coworker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Turn Cowork into an autonomous PM for Claude Code. Delegate coding tasks to your local Claude Code CLI, iterate with session resumption, and keep a running project state.",
   "author": {
     "name": "İbrahim Yıldız",
