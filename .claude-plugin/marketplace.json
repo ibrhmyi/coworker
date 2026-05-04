@@ -1,0 +1,19 @@
+{
+  "name": "coworker",
+  "owner": {
+    "name": "ibrhmyi"
+  },
+  "plugins": [
+    {
+      "name": "coworker",
+      "description": "Autonomous PM for Claude Code. Delegate coding tasks to your local Claude Code CLI, iterate with session resumption, keep a running project state.",
+      "source": {
+        "source": "git-subdir",
+        "url": "ibrhmyi/coworker",
+        "path": "plugin",
+        "ref": "v0.1.1-plugin"
+      },
+      "homepage": "https://github.com/ibrhmyi/coworker"
+    }
+  ]
+}

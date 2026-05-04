@@ -78,40 +78,36 @@ Measured from a 5-task development session with iterations:
 
 Coworker doesn't save money on the coding side — it saves **your time** and **your PM's context space**.
 
-## Quick Start
+## Quick Install
 
-### Cowork plugin (recommended)
+Three ways to get Coworker running:
 
-One-click Cowork install. Bundles the MCP connector + 2 skills. See [`plugin/README.md`](plugin/README.md).
+1. **Cowork plugin (drag-drop)**
+   Download [`coworker.plugin`](https://github.com/ibrhmyi/coworker/releases/tag/v0.1.1-plugin) from the v0.1.1-plugin release and open it. Done.
 
-### One-command setup
+2. **Claude Code marketplace**
+   ```bash
+   claude plugin marketplace add ibrhmyi/coworker
+   claude plugin install coworker@coworker
+   ```
 
-```bash
-npx coworker-mcp setup
-```
-
-This checks dependencies, downloads cloudflared if needed, initializes the project, and starts the server. The connector URL is **automatically copied to your clipboard**.
-
-### Then connect to Cowork
-
-1. Open Claude Desktop → Settings → Connectors
-2. Add custom connector → **Paste** (URL is on your clipboard)
-3. Save → Toggle on in your conversation
-4. Say: *"What tools do you have?"* — you should see 6 Coworker tools
-
-### For a permanent URL (recommended)
-
-```bash
-npx coworker-mcp setup --stable
-```
-
-Sets up a named Cloudflare tunnel. URL never changes. Paste once, done forever.
+3. **Standalone MCP server**
+   ```bash
+   npx coworker-mcp@latest setup
+   ```
 
 ### Requirements
 
 - Node.js 20+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (authenticated)
-- cloudflared (auto-downloaded if missing)
+- For option 3: cloudflared (auto-downloaded if missing)
+
+### Then connect to Cowork (option 3 only)
+
+1. Open Claude Desktop → Settings → Connectors
+2. Add custom connector → **Paste** (URL is on your clipboard)
+3. Save → Toggle on in your conversation
+4. Say: *"What tools do you have?"* — you should see 6 Coworker tools
 
 ## MCP Tools
 
