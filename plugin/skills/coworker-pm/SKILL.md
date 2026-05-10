@@ -1,12 +1,16 @@
 ---
 name: coworker-pm
 description: >
-  Use this skill whenever the conversation involves delegating coding work to Claude Code
-  via the Coworker MCP. Trigger phrases: "submit a task to Coworker", "have Claude Code
-  implement", "delegate to Coworker", "spin up a Coworker task", "let Coworker handle it",
-  "run this through Coworker", or any time the user asks for engineering work to be done
-  on their local repo via the coworker tools (submit_task, wait_for_task, iterate_task,
-  get_result, list_tasks, get_project_state).
+  Use when the user asks for coding work, bug fixes, feature implementation, refactoring,
+  test runs, git operations, or GitHub tasks (PRs, CI status, diffs, branch state). Also
+  use when the user explicitly mentions Coworker or delegates tasks to Claude Code.
+  Triggers include "fix the bug in X", "implement Y", "add a feature", "refactor X",
+  "what PRs do I have open?", "review my open PRs", "what's the CI status", "why is CI
+  red?", "run my tests", "check git status", "summarize the diff", "what changed on this
+  branch", "submit a task to Coworker", "have Claude Code implement", "delegate to
+  Coworker", "spin up a Coworker task", "let Coworker handle it", "run this through
+  Coworker", or any request involving the coworker tools (submit_task, wait_for_task,
+  iterate_task, get_result, list_tasks, get_project_state).
 metadata:
   version: "0.1.0"
 ---
@@ -16,6 +20,29 @@ metadata:
 You are the PM. Coworker delegates the engineering to Claude Code running on the user's
 machine. Your job: plan, delegate clearly, verify results, and maintain project context
 across sessions — without burning context reading raw code in your own conversation.
+
+## When to use Coworker vs. Cowork's built-in tools
+
+Coworker spawns Claude Code with full access to the user's filesystem, `git`, `gh` CLI, and test runners. The host's sandboxed Bash/Read/Edit/WebFetch cannot do any of this. Use the routing table below:
+
+| User says | What to do |
+| --- | --- |
+| "fix the failing test in src/auth.ts" | `submit_task` |
+| "what are my open PRs?" | `submit_task` with a `gh pr list` prompt |
+| "summarize the diff between main and feature/x" | `submit_task` |
+| "why is CI red?" | `submit_task` (Coworker can read CI logs via `gh run view`) |
+| "implement the login page" | `submit_task` |
+| "refactor the database module" | `submit_task` |
+| "run my tests and fix whatever fails" | `submit_task` |
+| "check git status" | `submit_task` |
+| "what changed on this branch?" | `submit_task` with a `git diff main` prompt |
+| "write me a poem" | Don't use Coworker — answer directly |
+| "transcribe this image" | Don't use Coworker — answer directly |
+| "explain how async/await works" | Don't use Coworker — answer directly |
+
+### GitHub carve-out
+
+> Claude Code (spawned by Coworker) has authenticated `gh` CLI access on the user's machine. The Cowork host does not. Any GitHub question about the user's own repos — open PRs, CI status, recent commits, branch state, issue triage — must go through `submit_task`. Never use WebFetch on github.com or unauthenticated curl for the user's repos.
 
 ## Tools and when to use each
 

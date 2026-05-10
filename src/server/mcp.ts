@@ -40,7 +40,7 @@ function createMcpServer(projectDir: string): McpServer {
   });
 
   server.registerTool('submit_task', {
-    description: "Submit a coding task to Claude Code. Returns immediately with a task ID. Use wait_for_task to get the result.",
+    description: "Use this whenever the user asks for coding work, git operations, GitHub operations (gh CLI), test runs, or investigation of their local repository. Spawns Claude Code with full authenticated access — gh CLI, git, test runners, and the user's actual filesystem. Prefer this over the host's sandboxed Bash/Read/Edit/WebFetch for any work that touches the user's real codebase or their GitHub repos. Returns immediately with a task ID; use wait_for_task for the result.",
     inputSchema: submitTaskToolConfig.inputSchema,
   }, async (args) => {
     taskCallCount++;
@@ -49,21 +49,21 @@ function createMcpServer(projectDir: string): McpServer {
   });
 
   server.registerTool('wait_for_task', {
-    description: "Wait for a running task to complete. Returns the full result once done. If already complete, returns immediately.",
+    description: "Use after submit_task or iterate_task to block until the result is ready. Waits for a running task to complete and returns the full result once done. If already complete, returns immediately.",
     inputSchema: waitForTaskToolConfig.inputSchema,
   }, async (args) => {
     return handleWaitForTask(args as Parameters<typeof handleWaitForTask>[0]);
   });
 
   server.registerTool('get_result', {
-    description: "Get the result of a completed task at a specified detail level (oneline, paragraph, or full path).",
+    description: "Use to fetch a previously completed task's output at a chosen detail level. Gets the result of a completed task at a specified detail level (oneline, paragraph, or full path).",
     inputSchema: getResultToolConfig.inputSchema,
   }, async (args) => {
     return handleGetResult(args as Parameters<typeof handleGetResult>[0]);
   });
 
   server.registerTool('iterate_task', {
-    description: "Continue an existing task with feedback. Returns immediately with a new task ID. Use wait_for_task to get the result.",
+    description: "Use to give follow-up feedback on a Coworker task without starting fresh — preserves Claude Code's session and context. Continues an existing task with feedback. Returns immediately with a new task ID. Use wait_for_task for the result.",
     inputSchema: iterateTaskToolConfig.inputSchema,
   }, async (args) => {
     taskCallCount++;
@@ -72,14 +72,14 @@ function createMcpServer(projectDir: string): McpServer {
   });
 
   server.registerTool('list_tasks', {
-    description: "List recent tasks with compact summaries. Use to check what's been run without scanning your own history.",
+    description: "Use when the user asks 'what did Coworker do recently' or 'is there a task running'. Lists recent tasks with compact summaries without scanning your own history.",
     inputSchema: listTasksToolConfig.inputSchema,
   }, async (args) => {
     return handleListTasks(args as Parameters<typeof handleListTasks>[0]);
   });
 
   server.registerTool('get_project_state', {
-    description: "Get the current project state including status, context, and decisions. Use this at the start of a new conversation to catch up on what's been built.",
+    description: "Use at the start of a conversation to catch up on what Coworker has been building, especially when resuming after a break. Gets the current project state including status, context, and decisions.",
     inputSchema: getProjectStateToolConfig.inputSchema,
   }, async (args) => {
     return handleGetProjectState(args as Parameters<typeof handleGetProjectState>[0], projectDir);
